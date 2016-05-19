@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  ~ Copyright (c) 2012-2014 Arne Schwabe
+  ~ Copyright (c) 2012-2016 Arne Schwabe
   ~ Distributed under the GNU GPL v2 with additional terms. For full terms see the file doc/LICENSE.txt
   -->
 
@@ -42,18 +42,17 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:autoLink="all"
-            android:text="@string/copyright_guicode" />
+            android:text="@string/copyright_logo" />
 
         <Space
             android:layout_width="match_parent"
             android:layout_height="12sp" />
 
         <TextView
-            android:id="@+id/donatestring"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/donatewithpaypal"
-            tools:ignore="SelectableText" />
+            android:autoLink="all"
+            android:text="@string/copyright_guicode" />
 
 
         <TextView

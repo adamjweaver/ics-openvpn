@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2014 Arne Schwabe
+ * Copyright (c) 2012-2016 Arne Schwabe
  * Distributed under the GNU GPL v2 with additional terms. For full terms see the file doc/LICENSE.txt
  */
 
@@ -66,23 +66,24 @@ public class ProfileManager {
 
     }
 
-    public static void setConnectedVpnProfile(Context c, VpnProfile connectedrofile) {
+    /**
+     * Sets the profile that is connected (to connect if the service restarts)
+     */
+    public static void setConnectedVpnProfile(Context c, VpnProfile connectedProfile) {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(c);
         Editor prefsedit = prefs.edit();
 
-        prefsedit.putString(LAST_CONNECTED_PROFILE, connectedrofile.getUUIDString());
+        prefsedit.putString(LAST_CONNECTED_PROFILE, connectedProfile.getUUIDString());
         prefsedit.apply();
-        mLastConnectedVpn = connectedrofile;
+        mLastConnectedVpn = connectedProfile;
 
     }
 
-    public static VpnProfile getLastConnectedProfile(Context c, boolean onBoot) {
+    /**
+     * Returns the profile that was last connected (to connect if the service restarts)
+     */
+    public static VpnProfile getLastConnectedProfile(Context c) {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(c);
-
-        boolean useStartOnBoot = prefs.getBoolean("restartvpnonboot", false);
-
-        if (onBoot && !useStartOnBoot)
-            return null;
 
         String lastConnectedProfile = prefs.getString(LAST_CONNECTED_PROFILE, null);
         if (lastConnectedProfile != null)
@@ -195,4 +196,12 @@ public class ProfileManager {
         return mLastConnectedVpn;
     }
 
+    public static VpnProfile getAlwaysOnVPN(Context context) {
+        checkInstance(context);
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+
+        String uuid = prefs.getString("alwaysOnVpn", null);
+        return get(uuid);
+
+    }
 }

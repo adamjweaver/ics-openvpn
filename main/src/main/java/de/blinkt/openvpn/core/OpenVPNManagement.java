@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2014 Arne Schwabe
+ * Copyright (c) 2012-2016 Arne Schwabe
  * Distributed under the GNU GPL v2 with additional terms. For full terms see the file doc/LICENSE.txt
  */
 
@@ -16,15 +16,19 @@ public interface OpenVPNManagement {
         screenOff
     }
 
-	int mBytecountInterval =2;
+    int mBytecountInterval = 2;
 
-	void reconnect();
+    void reconnect();
 
-	void pause(pauseReason reason);
+    void pause(pauseReason reason);
 
-	void resume();
+    void resume();
 
-	boolean stopVPN();
+    /**
+     * @param replaceConnection True if the VPN is connected by a new connection.
+     * @return true if there was a process that has been send a stop signal
+     */
+    boolean stopVPN(boolean replaceConnection);
 
     /*
      * Rebind the interface

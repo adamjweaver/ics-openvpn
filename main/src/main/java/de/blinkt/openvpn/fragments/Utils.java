@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2014 Arne Schwabe
+ * Copyright (c) 2012-2016 Arne Schwabe
  * Distributed under the GNU GPL v2 with additional terms. For full terms see the file doc/LICENSE.txt
  */
 
@@ -49,10 +49,12 @@ public class Utils {
                 supportedMimeTypes.add("application/x-x509-ca-cert");
                 supportedMimeTypes.add("application/x-x509-user-cert");
                 supportedMimeTypes.add("application/x-pem-file");
+                supportedMimeTypes.add("application/pkix-cert");
                 supportedMimeTypes.add("text/plain");
 
                 extensions.add("pem");
                 extensions.add("crt");
+                extensions.add("cer");
                 break;
             case KEYFILE:
                 i.setType("application/x-pem-file");
@@ -86,6 +88,11 @@ public class Utils {
                 extensions.add("conf");
                 break;
 
+            case CRL_FILE:
+                supportedMimeTypes.add("application/x-pkcs7-crl");
+                supportedMimeTypes.add("application/pkix-crl");
+                break;
+
             case USERPW_FILE:
                 i.setType("text/plain");
                 supportedMimeTypes.add("text/plain");
@@ -117,7 +124,7 @@ public class Utils {
 
         //noinspection ConstantConditions
         if (!isIntentAvailable(c,i)) {
-            i.setAction(Intent.ACTION_OPEN_DOCUMENT);
+                i.setAction(Intent.ACTION_OPEN_DOCUMENT);
             i.setPackage(null);
 
             // Check for really broken devices ... :(
@@ -144,7 +151,19 @@ public class Utils {
         List<ResolveInfo> list =
                 packageManager.queryIntentActivities(i,
                         PackageManager.MATCH_DEFAULT_ONLY);
-        return list.size() > 0;
+
+        // Ignore the Android TV framework app in the list
+        int size = list.size();
+        for (ResolveInfo ri: list)
+        {
+            // Ignore stub apps
+            if ("com.google.android.tv.frameworkpackagestubs".equals(ri.activityInfo.packageName))
+            {
+                size--;
+            }
+        }
+
+        return size > 0;
     }
 
 
@@ -250,4 +269,5 @@ public class Utils {
 
         return prefix + VpnProfile.INLINE_TAG + newData;
     }
+
 }

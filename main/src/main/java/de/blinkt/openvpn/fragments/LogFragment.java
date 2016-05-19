@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2014 Arne Schwabe
+ * Copyright (c) 2012-2016 Arne Schwabe
  * Distributed under the GNU GPL v2 with additional terms. For full terms see the file doc/LICENSE.txt
  */
 
@@ -22,7 +22,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Handler.Callback;
 import android.os.Message;
-import android.preference.Preference;
 import android.preference.PreferenceManager;
 import android.support.annotation.Nullable;
 import android.text.SpannableString;
@@ -63,7 +62,7 @@ import de.blinkt.openvpn.core.OpenVPNService;
 import de.blinkt.openvpn.core.ProfileManager;
 import de.blinkt.openvpn.core.VpnStatus;
 import de.blinkt.openvpn.core.VpnStatus.ConnectionStatus;
-import de.blinkt.openvpn.core.VpnStatus.LogItem;
+import de.blinkt.openvpn.core.LogItem;
 import de.blinkt.openvpn.core.VpnStatus.LogListener;
 import de.blinkt.openvpn.core.VpnStatus.StateListener;
 
@@ -629,7 +628,14 @@ public class LogFragment extends ListFragment implements StateListener, SeekBar.
     }
 
     @Override
-    public void onAttach(Activity activity) {
+    public void onViewCreated(View view, Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        // Scroll to the end of the list end
+        //getListView().setSelection(getListView().getAdapter().getCount()-1);
+    }
+
+    @Override
+    public void onAttach(Context activity) {
         super.onAttach(activity);
         if (getResources().getBoolean(R.bool.logSildersAlwaysVisible)) {
             mShowOptionsLayout = true;
@@ -650,20 +656,15 @@ public class LogFragment extends ListFragment implements StateListener, SeekBar.
     @Override
     public void updateState(final String status, final String logMessage, final int resId, final ConnectionStatus level) {
         if (isAdded()) {
-            final String cleanLogMessage = VpnStatus.getCleanLogMessage(level, logMessage);
+            final String cleanLogMessage = VpnStatus.getLastCleanLogMessage(getActivity());
 
             getActivity().runOnUiThread(new Runnable() {
 
                 @Override
                 public void run() {
                     if (isAdded()) {
-                        String prefix = getString(resId) + ":";
-                        if (status.equals("BYTECOUNT") || status.equals("NOPROCESS"))
-                            prefix = "";
-                        if (resId == R.string.unknown_state)
-                            prefix += status;
                         if (mSpeedView != null) {
-                            mSpeedView.setText(prefix + cleanLogMessage);
+                            mSpeedView.setText(cleanLogMessage);
                         }
                         if (mConnectStatus != null)
                             mConnectStatus.setText(getString(resId));

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2014 Arne Schwabe
+ * Copyright (c) 2012-2016 Arne Schwabe
  * Distributed under the GNU GPL v2 with additional terms. For full terms see the file doc/LICENSE.txt
  */
 
@@ -49,6 +49,7 @@ public class OpenVpnManagementThread implements Runnable, OpenVPNManagement {
 
     private pauseReason lastPauseReason = pauseReason.noNetwork;
     private PausedStateCallback mPauseCallback;
+    private boolean mShuttingDown;
 
     public OpenVpnManagementThread(VpnProfile profile, OpenVPNService openVpnService) {
         mProfile = profile;
@@ -64,7 +65,7 @@ public class OpenVpnManagementThread implements Runnable, OpenVPNManagement {
 
         mServerSocketLocal = new LocalSocket();
 
-        while (tries > 0 && !mServerSocketLocal.isConnected()) {
+        while (tries > 0 && !mServerSocketLocal.isBound()) {
             try {
                 mServerSocketLocal.bind(new LocalSocketAddress(socketName,
                         LocalSocketAddress.Namespace.FILESYSTEM));
@@ -223,7 +224,8 @@ public class OpenVpnManagementThread implements Runnable, OpenVPNManagement {
                     processByteCount(argument);
                     break;
                 case "STATE":
-                    processState(argument);
+                    if (!mShuttingDown)
+                        processState(argument);
                     break;
                 case "PROXY":
                     processProxyCMD(argument);
@@ -452,7 +454,7 @@ public class OpenVpnManagementThread implements Runnable, OpenVPNManagement {
 
                 break;
             default:
-                Log.e(TAG, "Unkown needok command " + argument);
+                Log.e(TAG, "Unknown needok command " + argument);
                 return;
         }
 
@@ -621,7 +623,9 @@ public class OpenVpnManagementThread implements Runnable, OpenVPNManagement {
     }
 
     @Override
-    public boolean stopVPN() {
+    public boolean stopVPN(boolean replaceConnection) {
+        mShuttingDown = true;
         return stopOpenVPN();
     }
+
 }

@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2012-2014 Arne Schwabe
+ * Copyright (c) 2012-2016 Arne Schwabe
  * Distributed under the GNU GPL v2 with additional terms. For full terms see the file doc/LICENSE.txt
  */
 
@@ -15,10 +15,11 @@ import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
-import android.os.NetworkOnMainThreadException;
 import android.provider.OpenableColumns;
 import android.security.KeyChain;
 import android.security.KeyChainAliasCallback;
@@ -32,8 +33,10 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.CheckBox;
+import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -67,7 +70,8 @@ public class ConfigConverter extends BaseActivity implements FileSelectCallback,
     private static final int RESULT_INSTALLPKCS12 = 7;
     private static final int CHOOSE_FILE_OFFSET = 1000;
     public static final String VPNPROFILE = "vpnProfile";
-    private static final int PERMISSION_REQUEST = 37231;
+    private static final int PERMISSION_REQUEST_EMBED_FILES = 37231;
+    private static final int PERMISSION_REQUEST_READ_URL = PERMISSION_REQUEST_EMBED_FILES + 1;
 
     private VpnProfile mResult;
 
@@ -79,24 +83,32 @@ public class ConfigConverter extends BaseActivity implements FileSelectCallback,
     private Map<Utils.FileType, FileSelectLayout> fileSelectMap = new HashMap<>();
     private String mEmbeddedPwFile;
     private Vector<String> mLogEntries = new Vector<>();
-    private String mCrlFileName;
+    private Uri mSourceUri;
+    private EditText mProfilename;
+    private AsyncTask<Void, Void, Integer> mImportTask;
+    private LinearLayout mLogLayout;
+    private TextView mProfilenameLabel;
 
     @Override
     public void onClick(View v) {
         if (v.getId() == R.id.fab_save)
             userActionSaveProfile();
         if (v.getId() == R.id.permssion_hint && Build.VERSION.SDK_INT == Build.VERSION_CODES.M)
-            doRequestSDCardPermission();
+            doRequestSDCardPermission(PERMISSION_REQUEST_EMBED_FILES);
 
     }
 
     @TargetApi(Build.VERSION_CODES.M)
-    private void doRequestSDCardPermission() {
-        requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, PERMISSION_REQUEST);
+    private void doRequestSDCardPermission(int requestCode) {
+        requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, requestCode);
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        // Permission declined, do nothing
+        if (grantResults[0] == PackageManager.PERMISSION_DENIED)
+            return;
+
         // Reset file select dialogs
         findViewById(R.id.files_missing_hint).setVisibility(View.GONE);
         findViewById(R.id.permssion_hint).setVisibility(View.GONE);
@@ -108,8 +120,13 @@ public class ConfigConverter extends BaseActivity implements FileSelectCallback,
                 i++;
         }
 
-        if (requestCode == PERMISSION_REQUEST)
+        if (requestCode == PERMISSION_REQUEST_EMBED_FILES)
             embedFiles(null);
+
+        else if (requestCode == PERMISSION_REQUEST_READ_URL) {
+            if (mSourceUri != null)
+                doImportUri(mSourceUri);
+        }
     }
 
     @Override
@@ -129,6 +146,13 @@ public class ConfigConverter extends BaseActivity implements FileSelectCallback,
         if (mResult == null) {
             log(R.string.import_config_error);
             Toast.makeText(this, R.string.import_config_error, Toast.LENGTH_LONG).show();
+            return true;
+        }
+
+        mResult.mName = mProfilename.getText().toString();
+        ProfileManager vpl = ProfileManager.getInstance(this);
+        if (vpl.getProfileByName(mResult.mName) != null) {
+            mProfilename.setError(getString(R.string.duplicate_profile_name));
             return true;
         }
 
@@ -162,7 +186,7 @@ public class ConfigConverter extends BaseActivity implements FileSelectCallback,
         }
         outState.putIntArray("fileselects", fileselects);
         outState.putString("pwfile", mEmbeddedPwFile);
-        outState.putString("crlfile", mCrlFileName);
+        outState.putParcelable("mSourceUri", mSourceUri);
     }
 
     @Override
@@ -200,7 +224,7 @@ public class ConfigConverter extends BaseActivity implements FileSelectCallback,
                     mResult.mClientKeyFilename = data;
                     break;
                 case CRL_FILE:
-                    mCrlFileName = data;
+                    mResult.mCrlFilename = data;
                     break;
                 default:
                     Assert.fail();
@@ -227,6 +251,7 @@ public class ConfigConverter extends BaseActivity implements FileSelectCallback,
 
     public void showCertDialog() {
         try {
+            //noinspection WrongConstant
             KeyChain.choosePrivateKeyAlias(this,
                     new KeyChainAliasCallback() {
 
@@ -386,7 +411,7 @@ public class ConfigConverter extends BaseActivity implements FileSelectCallback,
 
             case CRL_FILE:
                 titleRes = R.string.crl_file;
-                value = mCrlFileName;
+                value = mResult.mCrlFilename;
                 break;
         }
 
@@ -401,8 +426,7 @@ public class ConfigConverter extends BaseActivity implements FileSelectCallback,
             log(R.string.import_could_not_open, filename);
         }
 
-        if (fileType != Utils.FileType.CRL_FILE)
-            addFileSelectDialog(fileType);
+        addFileSelectDialog(fileType);
 
         return foundfile;
     }
@@ -556,19 +580,10 @@ public class ConfigConverter extends BaseActivity implements FileSelectCallback,
         mResult.mClientKeyFilename = embedFile(mResult.mClientKeyFilename, Utils.FileType.KEYFILE, false);
         mResult.mTLSAuthFilename = embedFile(mResult.mTLSAuthFilename, Utils.FileType.TLS_AUTH_FILE, false);
         mResult.mPKCS12Filename = embedFile(mResult.mPKCS12Filename, Utils.FileType.PKCS12, false);
+        mResult.mCrlFilename = embedFile(mResult.mCrlFilename, Utils.FileType.CRL_FILE, true);
         if (cp != null) {
             mEmbeddedPwFile = cp.getAuthUserPassFile();
             mEmbeddedPwFile = embedFile(cp.getAuthUserPassFile(), Utils.FileType.USERPW_FILE, false);
-            mCrlFileName = embedFile(cp.getCrlVerifyFile(), Utils.FileType.CRL_FILE, true);
-
-            ConfigParser.removeCRLCustomOption(mResult);
-            if (!TextUtils.isEmpty(mCrlFileName)) {
-                // TODO: Convert this to a real config option that is parsed
-                ConfigParser.removeCRLCustomOption(mResult);
-                mResult.mCustomConfigOptions += "\ncrl-verify " + VpnProfile.openVpnEscape(mCrlFileName);
-            } else if (!TextUtils.isEmpty(cp.getCrlVerifyFile())) {
-                mResult.mCustomConfigOptions += "\n#crl-verify " + VpnProfile.openVpnEscape(cp.getCrlVerifyFile());
-            }
         }
 
         updateFileSelectDialogs();
@@ -592,11 +607,18 @@ public class ConfigConverter extends BaseActivity implements FileSelectCallback,
             findViewById(R.id.fab_footerspace).setVisibility(View.VISIBLE);
         }
 
+        mLogLayout = (LinearLayout) findViewById(R.id.config_convert_root);
+
+
+        mProfilename = (EditText) findViewById(R.id.profilename);
+        mProfilenameLabel = (TextView) findViewById(R.id.profilename_label);
+
         if (savedInstanceState != null && savedInstanceState.containsKey(VPNPROFILE)) {
             mResult = (VpnProfile) savedInstanceState.getSerializable(VPNPROFILE);
             mAliasName = savedInstanceState.getString("mAliasName");
             mEmbeddedPwFile = savedInstanceState.getString("pwfile");
-            mCrlFileName = savedInstanceState.getString("crlfile");
+            mSourceUri = savedInstanceState.getParcelable("mSourceUri");
+            mProfilename.setText(mResult.mName);
 
             if (savedInstanceState.containsKey("logentries")) {
                 //noinspection ConstantConditions
@@ -616,64 +638,7 @@ public class ConfigConverter extends BaseActivity implements FileSelectCallback,
         final android.content.Intent intent = getIntent();
 
         if (intent != null) {
-            final android.net.Uri data = intent.getData();
-            if (data != null) {
-                //log(R.string.import_experimental);
-                log(R.string.importing_config, data.toString());
-                try {
-                    String possibleName = null;
-                    if ((data.getScheme() != null && data.getScheme().equals("file")) ||
-                            (data.getLastPathSegment() != null &&
-                                    (data.getLastPathSegment().endsWith(".ovpn") ||
-                                            data.getLastPathSegment().endsWith(".conf")))
-                            ) {
-                        possibleName = data.getLastPathSegment();
-                        if (possibleName.lastIndexOf('/') != -1)
-                            possibleName = possibleName.substring(possibleName.lastIndexOf('/') + 1);
-
-                    }
-
-                    mPathsegments = data.getPathSegments();
-
-                    Cursor cursor = null;
-                    cursor = getContentResolver().query(data, null, null, null, null);
-
-                    try {
-
-                        if (cursor != null && cursor.moveToFirst()) {
-                            int columnIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
-
-                            if (columnIndex != -1) {
-                                String displayName = cursor.getString(columnIndex);
-                                if (displayName != null)
-                                    possibleName = displayName;
-                            }
-                            columnIndex = cursor.getColumnIndex("mime_type");
-                            if (columnIndex != -1) {
-                                log("Opening Mime TYPE: " + cursor.getString(columnIndex));
-                            }
-                        }
-                    } finally {
-                        if (cursor != null)
-                            cursor.close();
-                    }
-                    if (possibleName != null) {
-                        possibleName = possibleName.replace(".ovpn", "");
-                        possibleName = possibleName.replace(".conf", "");
-                    }
-                    try {
-                        InputStream is = getContentResolver().openInputStream(data);
-                        doImport(is, possibleName);
-                    } catch (NetworkOnMainThreadException nom) {
-                        throw new RuntimeException("Network on Main: + " + data);
-                    }
-
-                } catch (FileNotFoundException e) {
-                    log(R.string.import_content_resolve_error);
-                } catch (SecurityException se) {
-                    log(R.string.import_content_resolve_error + ":" + se.getLocalizedMessage());
-                }
-            }
+            doImportIntent(intent);
 
             // We parsed the intent, relay on saved instance for restoring
             setIntent(null);
@@ -682,23 +647,147 @@ public class ConfigConverter extends BaseActivity implements FileSelectCallback,
 
     }
 
+    private void doImportIntent(Intent intent) {
+        final Uri data = intent.getData();
+        if (data != null) {
+            mSourceUri = data;
+            doImportUri(data);
+        }
+    }
+
+    private void doImportUri(Uri data) {
+        //log(R.string.import_experimental);
+        log(R.string.importing_config, data.toString());
+        String possibleName = null;
+        if ((data.getScheme() != null && data.getScheme().equals("file")) ||
+                (data.getLastPathSegment() != null &&
+                        (data.getLastPathSegment().endsWith(".ovpn") ||
+                                data.getLastPathSegment().endsWith(".conf")))
+                ) {
+            possibleName = data.getLastPathSegment();
+            if (possibleName.lastIndexOf('/') != -1)
+                possibleName = possibleName.substring(possibleName.lastIndexOf('/') + 1);
+
+        }
+
+        mPathsegments = data.getPathSegments();
+
+        Cursor cursor = getContentResolver().query(data, null, null, null, null);
+
+        try {
+
+            if (cursor != null && cursor.moveToFirst()) {
+                int columnIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+
+                if (columnIndex != -1) {
+                    String displayName = cursor.getString(columnIndex);
+                    if (displayName != null)
+                        possibleName = displayName;
+                }
+                columnIndex = cursor.getColumnIndex("mime_type");
+                if (columnIndex != -1) {
+                    log("Mime type: " + cursor.getString(columnIndex));
+                }
+            }
+        } finally {
+            if (cursor != null)
+                cursor.close();
+        }
+        if (possibleName != null) {
+            possibleName = possibleName.replace(".ovpn", "");
+            possibleName = possibleName.replace(".conf", "");
+        }
+
+        startImportTask(data, possibleName);
+
+
+    }
+
+    private void startImportTask(final Uri data, final String possibleName) {
+        mImportTask = new AsyncTask<Void, Void, Integer>() {
+            private ProgressBar mProgress;
+
+            @Override
+            protected void onPreExecute() {
+                mProgress = new ProgressBar(ConfigConverter.this);
+                addViewToLog(mProgress);
+            }
+
+            @Override
+            protected Integer doInBackground(Void... params) {
+                try {
+                    InputStream is = getContentResolver().openInputStream(data);
+
+                    doImport(is);
+                    if (mResult==null)
+                        return -3;
+                } catch (FileNotFoundException |
+                        SecurityException se)
+
+                {
+                    log(R.string.import_content_resolve_error + ":" + se.getLocalizedMessage());
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+                        checkMarschmallowFileImportError(data);
+                    return -2;
+                }
+
+                return 0;
+            }
+
+            @Override
+            protected void onPostExecute(Integer errorCode) {
+                mLogLayout.removeView(mProgress);
+                if (errorCode == 0) {
+                    displayWarnings();
+                    mResult.mName = getUniqueProfileName(possibleName);
+                    mProfilename.setVisibility(View.VISIBLE);
+                    mProfilenameLabel.setVisibility(View.VISIBLE);
+                    mProfilename.setText(mResult.getName());
+
+                    log(R.string.import_done);
+                }
+            }
+        }.execute();
+    }
+
+
+    @TargetApi(Build.VERSION_CODES.M)
+    private void checkMarschmallowFileImportError(Uri data) {
+        // Permission already granted, not the source of the error
+        if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED)
+            return;
+
+        // We got a file:/// URL and have no permission to read it. Technically an error of the calling app since
+        // it makes an assumption about other apps being able to read the url but well ...
+        if (data != null && "file".equals(data.getScheme()))
+            doRequestSDCardPermission(PERMISSION_REQUEST_READ_URL);
+
+    }
+
 
     @Override
     protected void onStart() {
         super.onStart();
-
-
     }
 
-    private void log(String logmessage) {
-        mLogEntries.add(logmessage);
-        TextView tv = new TextView(this);
-        tv.setText(logmessage);
-        LinearLayout logLayout = (LinearLayout) findViewById(R.id.config_convert_root);
-        logLayout.addView(tv, logLayout.getChildCount() - 1);
+    private void log(final String logmessage) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                TextView tv = new TextView(ConfigConverter.this);
+                mLogEntries.add(logmessage);
+                tv.setText(logmessage);
+
+                addViewToLog(tv);
+            }
+        });
     }
 
-    private void doImport(InputStream is, String newName) {
+    private void addViewToLog(View view) {
+        mLogLayout.addView(view, mLogLayout.getChildCount() - 1);
+    }
+
+    private void doImport(InputStream is) {
         ConfigParser cp = new ConfigParser();
         try {
             InputStreamReader isr = new InputStreamReader(is);
@@ -706,10 +795,6 @@ public class ConfigConverter extends BaseActivity implements FileSelectCallback,
             cp.parseConfig(isr);
             mResult = cp.convertProfile();
             embedFiles(cp);
-            displayWarnings();
-            mResult.mName = getUniqueProfileName(newName);
-
-            log(R.string.import_done);
             return;
 
         } catch (IOException | ConfigParseError e) {

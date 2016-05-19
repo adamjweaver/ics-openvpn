@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2014 Arne Schwabe
+ * Copyright (c) 2012-2016 Arne Schwabe
  * Distributed under the GNU GPL v2 with additional terms. For full terms see the file doc/LICENSE.txt
  */
 
@@ -32,8 +32,6 @@ public class ConfigParser {
     private HashMap<String, Vector<Vector<String>>> options = new HashMap<String, Vector<Vector<String>>>();
     private HashMap<String, Vector<String>> meta = new HashMap<String, Vector<String>>();
     private String auth_user_pass_file;
-    private String crl_verify_file;
-
 
     public void parseConfig(Reader reader) throws IOException, ConfigParseError {
 
@@ -130,10 +128,6 @@ public class ConfigParser {
 
     public String getAuthUserPassFile() {
         return auth_user_pass_file;
-    }
-
-    public String getCrlVerifyFile() {
-        return crl_verify_file;
     }
 
     enum linestate {
@@ -299,7 +293,8 @@ public class ConfigParser {
             {
                     {"setenv", "IV_GUI_VER"},
                     {"setenv", "IV_OPENVPN_GUI_VERSION"},
-                    {"engine", "dynamic"}
+                    {"engine", "dynamic"},
+                    {"setenv", "CLIENT_CERT"}
             };
 
     final String[] connectionOptions = {
@@ -398,6 +393,10 @@ public class ConfigParser {
 
             np.mCustomRoutesv6 = customIPv6Routes;
         }
+
+        Vector<String> routeNoPull = getOption("route-nopull", 1, 1);
+        if (routeNoPull!=null)
+            np.mRoutenopull=true;
 
         // Also recognize tls-auth [inline] direction ...
         Vector<Vector<String>> tlsauthoptions = getAllOption("tls-auth", 1, 2);
@@ -555,10 +554,12 @@ public class ConfigParser {
             if (verifyx509name.size() > 2) {
                 if (verifyx509name.get(2).equals("name"))
                     np.mX509AuthType = VpnProfile.X509_VERIFY_TLSREMOTE_RDN;
+                else if (verifyx509name.get(2).equals("subject"))
+                    np.mX509AuthType = VpnProfile.X509_VERIFY_TLSREMOTE_DN;
                 else if (verifyx509name.get(2).equals("name-prefix"))
                     np.mX509AuthType = VpnProfile.X509_VERIFY_TLSREMOTE_RDN_PREFIX;
                 else
-                    throw new ConfigParseError("Unknown parameter to x509-verify-name: " + verifyx509name.get(2));
+                    throw new ConfigParseError("Unknown parameter to verify-x509-name: " + verifyx509name.get(2));
             } else {
                 np.mX509AuthType = VpnProfile.X509_VERIFY_TLSREMOTE_DN;
             }
@@ -577,6 +578,9 @@ public class ConfigParser {
 
         if (getOption("persist-tun", 0, 0) != null)
             np.mPersistTun = true;
+
+        if (getOption("push-peer-info", 0, 0) != null)
+            np.mPushPeerInfo = true;
 
         Vector<String> connectretry = getOption("connect-retry", 1, 1);
         if (connectretry != null)
@@ -614,11 +618,12 @@ public class ConfigParser {
         Vector<String> crlfile = getOption("crl-verify", 1, 2);
         if (crlfile != null) {
             // If the 'dir' parameter is present just add it as custom option ..
-            np.mCustomConfigOptions += TextUtils.join(" ", crlfile) + "\n";
-            if (crlfile.size() == 2) {
+            if (crlfile.size() == 3 && crlfile.get(2).equals("dir"))
+                np.mCustomConfigOptions += TextUtils.join(" ", crlfile) + "\n";
+            else
                 // Save the filename for the config converter to add later
-                crl_verify_file = crlfile.get(1);
-            }
+                np.mCrlFilename = crlfile.get(1);
+
         }
 
 
@@ -804,16 +809,6 @@ public class ConfigParser {
             np.mUsername = parts[0];
             np.mPassword = parts[1];
         }
-    }
-
-    public static void removeCRLCustomOption(VpnProfile np) {
-        String lines[] = np.mCustomConfigOptions.split("\\r?\\n");
-        Vector<String> keeplines = new Vector<>();
-        for (String l : lines) {
-            if (!l.startsWith("crl-verify "))
-                keeplines.add(l);
-        }
-        np.mCustomConfigOptions = TextUtils.join("\n", keeplines);
     }
 
     private void checkIgnoreAndInvalidOptions(VpnProfile np) throws ConfigParseError {
