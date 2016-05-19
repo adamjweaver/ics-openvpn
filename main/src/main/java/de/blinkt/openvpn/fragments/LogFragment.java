@@ -100,17 +100,12 @@ public class LogFragment extends ListFragment implements StateListener, SeekBar.
 
     @Override
     public void onCheckedChanged(RadioGroup group, int checkedId) {
-        switch (checkedId) {
-            case R.id.radioISO:
-                ladapter.setTimeFormat(LogWindowListAdapter.TIME_FORMAT_ISO);
-                break;
-            case R.id.radioNone:
-                ladapter.setTimeFormat(LogWindowListAdapter.TIME_FORMAT_NONE);
-                break;
-            case R.id.radioShort:
-                ladapter.setTimeFormat(LogWindowListAdapter.TIME_FORMAT_SHORT);
-                break;
-
+        if (checkedId == R.id.radioISO) {
+            ladapter.setTimeFormat(LogWindowListAdapter.TIME_FORMAT_ISO);
+        } else if (checkedId == R.id.radioNone) {
+            ladapter.setTimeFormat(LogWindowListAdapter.TIME_FORMAT_NONE);
+        } else if (checkedId == R.id.radioShort) {
+            ladapter.setTimeFormat(LogWindowListAdapter.TIME_FORMAT_SHORT);
         }
     }
 
@@ -650,8 +645,6 @@ public class LogFragment extends ListFragment implements StateListener, SeekBar.
     @Override
     public void updateState(final String status, final String logMessage, final int resId, final ConnectionStatus level) {
         if (isAdded()) {
-            final String cleanLogMessage = VpnStatus.getCleanLogMessage(level, logMessage);
-
             getActivity().runOnUiThread(new Runnable() {
 
                 @Override
@@ -662,9 +655,9 @@ public class LogFragment extends ListFragment implements StateListener, SeekBar.
                             prefix = "";
                         if (resId == R.string.unknown_state)
                             prefix += status;
-                        if (mSpeedView != null) {
-                            mSpeedView.setText(prefix + cleanLogMessage);
-                        }
+                        if (mSpeedView != null)
+                            mSpeedView.setText(prefix + logMessage);
+
                         if (mConnectStatus != null)
                             mConnectStatus.setText(getString(resId));
                     }
