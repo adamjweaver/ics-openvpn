@@ -105,6 +105,20 @@ public class OpenVPNService extends VpnService implements StateListener, Callbac
             return String.format(Locale.getDefault(), "%.1f %sB", bytes / Math.pow(unit, exp), pre);
     }
 
+    private static OpenVPNService sService;
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+
+        sService = this;
+    }
+
+    public long getConnecttime() {
+        return mConnecttime;
+    }
+
+
     @Override
     public IBinder onBind(Intent intent) {
         String action = intent.getAction();
@@ -154,14 +168,14 @@ public class OpenVPNService extends VpnService implements StateListener, Callbac
         android.app.Notification.Builder nbuilder = new Notification.Builder(this);
 
         if (mProfile != null)
-            nbuilder.setContentTitle(getString(R.string.notifcation_title, mProfile.mName));
+            nbuilder.setContentTitle(getString(R.string.app));
         else
             nbuilder.setContentTitle(getString(R.string.notifcation_title_notconnect));
 
         nbuilder.setContentText(msg);
         nbuilder.setOnlyAlertOnce(true);
         nbuilder.setOngoing(true);
-        nbuilder.setContentIntent(getLogPendingIntent());
+        nbuilder.setContentIntent(getConfigurationIntent());
         nbuilder.setSmallIcon(icon);
 
 
@@ -201,6 +215,11 @@ public class OpenVPNService extends VpnService implements StateListener, Callbac
                 }
             });
     }
+
+    public PendingIntent getConfigurationIntent() {
+        return getLogPendingIntent();
+    }
+
 
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     private void lpNotificationExtras(Notification.Builder nbuilder) {
@@ -257,20 +276,22 @@ public class OpenVPNService extends VpnService implements StateListener, Callbac
             nbuilder.addAction(R.drawable.ic_menu_close_clear_cancel,
                     getString(R.string.cancel_connection), disconnectPendingIntent);
 
-            Intent pauseVPN = new Intent(this, OpenVPNService.class);
-            if (mDeviceStateReceiver == null || !mDeviceStateReceiver.isUserPaused()) {
-                pauseVPN.setAction(PAUSE_VPN);
-                PendingIntent pauseVPNPending = PendingIntent.getService(this, 0, pauseVPN, 0);
-                nbuilder.addAction(R.drawable.ic_menu_pause,
-                        getString(R.string.pauseVPN), pauseVPNPending);
+//            Intent pauseVPN = new Intent(this, OpenVPNService.class);
+//            if (mDeviceStateReceiver == null || !mDeviceStateReceiver.isUserPaused()) {
+//                pauseVPN.setAction(PAUSE_VPN);
+//                PendingIntent pauseVPNPending = PendingIntent.getService(this, 0, pauseVPN, 0);
+//                nbuilder.addAction(R.drawable.ic_menu_pause,
+//                        getString(R.string.pauseVPN), pauseVPNPending);
+//
+//            } else {
+//                pauseVPN.setAction(RESUME_VPN);
+//                PendingIntent resumeVPNPending = PendingIntent.getService(this, 0, pauseVPN, 0);
+//                nbuilder.addAction(R.drawable.ic_menu_play,
+//                        getString(R.string.resumevpn), resumeVPNPending);
+//            }
 
-            } else {
-                pauseVPN.setAction(RESUME_VPN);
-                PendingIntent resumeVPNPending = PendingIntent.getService(this, 0, pauseVPN, 0);
-                nbuilder.addAction(R.drawable.ic_menu_play,
-                        getString(R.string.resumevpn), resumeVPNPending);
-            }
-
+            nbuilder.addAction(android.R.drawable.ic_menu_preferences,
+                    getString(R.string.configure_the_vpn), getConfigurationIntent());
 
             //ignore exception
         } catch (NoSuchMethodException | IllegalArgumentException |
@@ -280,13 +301,34 @@ public class OpenVPNService extends VpnService implements StateListener, Callbac
 
     }
 
+    public interface ConfigIntentProvider {
+        Intent obtainConfigIntent(Context c);
+    }
+
+    public void setIntentProvider(ConfigIntentProvider intentProvider) {
+        mIntentProvider = intentProvider;
+    }
+
+    private ConfigIntentProvider mIntentProvider;
+
+
     PendingIntent getLogPendingIntent() {
         // Let the configure Button show the Log
         Intent intent = new Intent(getBaseContext(), LogWindow.class);
+        if (mIntentProvider != null) {
+            intent = mIntentProvider.obtainConfigIntent(getBaseContext());
+        }
         intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
         PendingIntent startLW = PendingIntent.getActivity(this, 0, intent, 0);
         intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
         return startLW;
+
+
+//        Intent intent = new Intent(getBaseContext(), LogWindow.class);
+//        intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+//        PendingIntent startLW = PendingIntent.getActivity(this, 0, intent, 0);
+//        intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+//        return startLW;
 
     }
 
@@ -371,7 +413,7 @@ public class OpenVPNService extends VpnService implements StateListener, Callbac
                 Log.d("OpenVPN", "Got no last connected profile on null intent. Assuming always on.");
                 mProfile = ProfileManager.getAlwaysOnVPN(this);
 
-                if (mProfile==null) {
+                if (mProfile == null) {
                     stopSelf(startId);
                     return START_NOT_STICKY;
                 }
@@ -477,21 +519,21 @@ public class OpenVPNService extends VpnService implements StateListener, Callbac
         }
 
         new Handler(getMainLooper()).post(new Runnable() {
-                         @Override
-                         public void run() {
-                             if (mDeviceStateReceiver != null)
-                                 unregisterDeviceStateReceiver();
+                                              @Override
+                                              public void run() {
+                                                  if (mDeviceStateReceiver != null)
+                                                      unregisterDeviceStateReceiver();
 
-                             registerDeviceStateReceiver(mManagement);
-                         }
-                     }
+                                                  registerDeviceStateReceiver(mManagement);
+                                              }
+                                          }
 
-                );
+        );
     }
 
     private void stopOldOpenVPNProcess() {
         if (mManagement != null) {
-            if (mOpenVPNThread!=null)
+            if (mOpenVPNThread != null)
                 ((OpenVPNThread) mOpenVPNThread).setReplaceConnection();
             if (mManagement.stopVPN(true)) {
                 // an old was asked to exit, wait 1s
@@ -541,7 +583,14 @@ public class OpenVPNService extends VpnService implements StateListener, Callbac
         VpnStatus.removeStateListener(this);
         VpnStatus.flushLog();
 
+        mIntentProvider = null;
+        sService = null;
     }
+
+    public static OpenVPNService getSingleton() {
+        return sService;
+    }
+
 
     private String getTunConfigString() {
         // The format of the string is not important, only that
@@ -700,7 +749,7 @@ public class OpenVPNService extends VpnService implements StateListener, Callbac
         mLocalIPv6 = null;
         mDomain = null;
 
-        builder.setConfigureIntent(getLogPendingIntent());
+        builder.setConfigureIntent(getConfigurationIntent());
 
         try {
             //Debug.stopMethodTracing();
@@ -948,8 +997,10 @@ public class OpenVPNService extends VpnService implements StateListener, Callbac
             // CONNECTED
             // Does not work :(
             String msg = getString(resid);
-            showNotification(VpnStatus.getLastCleanLogMessage(this),
-                    msg, lowpriority, 0, level);
+//            showNotification(VpnStatus.getLastCleanLogMessage(this),
+//                    msg, lowpriority, 0, level);
+            showNotification(msg + " " + logmessage, msg, lowpriority, 0, level);
+
 
         }
     }
