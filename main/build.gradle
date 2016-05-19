@@ -5,7 +5,7 @@
 
 import com.android.builder.model.ProductFlavor
 
-apply plugin: 'com.android.application'
+apply plugin: 'com.android.library'
 
 repositories {
     jcenter()
@@ -71,48 +71,6 @@ android {
             signingConfig signingConfigs.release
         }
     }
-
-
-    productFlavors {
-      //ovpn3
-
-      normal
-
-
-                        
-      /*                   
-      x86 {
-            versionCode Integer.parseInt("6" + defaultConfig.versionCode)
-            ndk {
-                abiFilter "x86"
-            }
-        }
-
-        mips {
-            versionCode Integer.parseInt("4" + defaultConfig.versionCode)
-            ndk {
-                abiFilter "mips"
-            }
-        }
-
-        armv7 {
-            versionCode Integer.parseInt("2" + defaultConfig.versionCode)
-            ndk {
-               abiFilter "armeabi-v7a"
-            }
-        }
-
-        arm {
-            versionCode Integer.parseInt("1" + defaultConfig.versionCode)
-            ndk {
-                abiFilter "armeabi"
-            }
-        }
-
-        fat
-        */
-    }
-
 
 }
 

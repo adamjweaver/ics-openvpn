@@ -26,13 +26,10 @@
         android:required="false" />
 
     <application
-        android:name=".core.ICSOpenVPNApplication"
         android:allowBackup="true"
         android:banner="@mipmap/banner_tv"
         android:icon="@mipmap/ic_launcher"
-        android:label="@string/app"
         android:supportsRtl="true"
-        android:theme="@style/blinkt"
         tools:ignore="UnusedAttribute">
         <activity
             android:name=".activities.VPNPreferences"
