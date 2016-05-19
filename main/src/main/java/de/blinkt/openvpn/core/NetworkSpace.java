@@ -68,7 +68,7 @@ public class NetworkSpace {
             return (networkMask == on.networkMask) && on.getFirstAddress().equals(getFirstAddress());
         }
 
-        public ipAddress(CIDRIP ip, boolean include) {
+        public ipAddress(Cidrip ip, boolean include) {
             included = include;
             netAddress = BigInteger.valueOf(ip.getInt());
             networkMask = ip.len;
@@ -207,12 +207,12 @@ public class NetworkSpace {
     }
 
 
-    void addIP(CIDRIP cidrIp, boolean include) {
+    void addIP(Cidrip cidrIp, boolean include) {
 
         mIpAddresses.add(new ipAddress(cidrIp, include));
     }
 
-    public void addIPSplit(CIDRIP cidrIp, boolean include) {
+    public void addIPSplit(Cidrip cidrIp, boolean include) {
         ipAddress newIP = new ipAddress(cidrIp, include);
         ipAddress[] splitIps = newIP.split();
         for (ipAddress split: splitIps)

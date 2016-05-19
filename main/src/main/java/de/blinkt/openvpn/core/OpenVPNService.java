@@ -54,7 +54,6 @@ import de.blinkt.openvpn.core.VpnStatus.StateListener;
 
 import static de.blinkt.openvpn.core.NetworkSpace.ipAddress;
 import static de.blinkt.openvpn.core.VpnStatus.ConnectionStatus.LEVEL_CONNECTED;
-import static de.blinkt.openvpn.core.VpnStatus.ConnectionStatus.LEVEL_CONNECTING_NO_SERVER_REPLY_YET;
 import static de.blinkt.openvpn.core.VpnStatus.ConnectionStatus.LEVEL_WAITING_FOR_USER_INPUT;
 
 public class OpenVPNService extends VpnService implements StateListener, Callback, ByteCountListener {
@@ -73,7 +72,7 @@ public class OpenVPNService extends VpnService implements StateListener, Callbac
     private Thread mProcessThread = null;
     private VpnProfile mProfile;
     private String mDomain = null;
-    private CIDRIP mLocalIP = null;
+    private Cidrip mLocalIP = null;
     private int mMtu;
     private String mLocalIPv6 = null;
     private DeviceStateReceiver mDeviceStateReceiver;
@@ -674,7 +673,7 @@ public class OpenVPNService extends VpnService implements StateListener, Callbac
         if ("samsung".equals(Build.BRAND) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && mDnslist.size() >= 1) {
             // Check if the first DNS Server is in the VPN range
             try {
-                ipAddress dnsServer = new ipAddress(new CIDRIP(mDnslist.get(0), 32), true);
+                ipAddress dnsServer = new ipAddress(new Cidrip(mDnslist.get(0), 32), true);
                 boolean dnsIncluded = false;
                 for (ipAddress net : positiveIPv4Routes) {
                     if (net.containsNet(dnsServer)) {
@@ -691,7 +690,7 @@ public class OpenVPNService extends VpnService implements StateListener, Callbac
             }
         }
 
-        ipAddress multicastRange = new ipAddress(new CIDRIP("224.0.0.0", 3), true);
+        ipAddress multicastRange = new ipAddress(new Cidrip("224.0.0.0", 3), true);
 
         for (NetworkSpace.ipAddress route : positiveIPv4Routes) {
             try {
@@ -798,10 +797,10 @@ public class OpenVPNService extends VpnService implements StateListener, Callbac
                 continue;
 
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT && !mProfile.mAllowLocalLAN) {
-                mRoutes.addIPSplit(new CIDRIP(ipAddr, netMask), true);
+                mRoutes.addIPSplit(new Cidrip(ipAddr, netMask), true);
 
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT && mProfile.mAllowLocalLAN)
-                mRoutes.addIP(new CIDRIP(ipAddr, netMask), false);
+                mRoutes.addIP(new Cidrip(ipAddr, netMask), false);
         }
     }
 
@@ -852,15 +851,15 @@ public class OpenVPNService extends VpnService implements StateListener, Callbac
     /**
      * Route that is always included, used by the v3 core
      */
-    public void addRoute(CIDRIP route) {
+    public void addRoute(Cidrip route) {
         mRoutes.addIP(route, true);
     }
 
     public void addRoute(String dest, String mask, String gateway, String device) {
-        CIDRIP route = new CIDRIP(dest, mask);
+        Cidrip route = new Cidrip(dest, mask);
         boolean include = isAndroidTunDevice(device);
 
-        NetworkSpace.ipAddress gatewayIP = new NetworkSpace.ipAddress(new CIDRIP(gateway, 32), false);
+        NetworkSpace.ipAddress gatewayIP = new NetworkSpace.ipAddress(new Cidrip(gateway, 32), false);
 
         if (mLocalIP == null) {
             VpnStatus.logError("Local IP address unset and received. Neither pushed server config nor local config specifies an IP addresses. Opening tun device is most likely going to fail.");
@@ -912,16 +911,16 @@ public class OpenVPNService extends VpnService implements StateListener, Callbac
         mMtu = mtu;
     }
 
-    public void setLocalIP(CIDRIP cdrip) {
+    public void setLocalIP(Cidrip cdrip) {
         mLocalIP = cdrip;
     }
 
     public void setLocalIP(String local, String netmask, int mtu, String mode) {
-        mLocalIP = new CIDRIP(local, netmask);
+        mLocalIP = new Cidrip(local, netmask);
         mMtu = mtu;
         mRemoteGW = null;
 
-        long netMaskAsInt = CIDRIP.getInt(netmask);
+        long netMaskAsInt = Cidrip.getInt(netmask);
 
         if (mLocalIP.len == 32 && !netmask.equals("255.255.255.255")) {
             // get the netmask as IP
@@ -952,7 +951,7 @@ public class OpenVPNService extends VpnService implements StateListener, Callbac
 
         /* Workaround for Lollipop, it  does not route traffic to the VPNs own network mask */
         if (mLocalIP.len <= 31 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            CIDRIP interfaceRoute = new CIDRIP(mLocalIP.mIp, mLocalIP.len);
+            Cidrip interfaceRoute = new Cidrip(mLocalIP.mIp, mLocalIP.len);
             interfaceRoute.normalise();
             addRoute(interfaceRoute);
         }

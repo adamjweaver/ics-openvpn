@@ -7,12 +7,12 @@ package de.blinkt.openvpn.core;
 
 import java.util.Locale;
 
-class CIDRIP {
+class Cidrip {
     String mIp;
     int len;
 
 
-    public CIDRIP(String ip, String mask) {
+    public Cidrip(String ip, String mask) {
         mIp = ip;
         long netmask = getInt(mask);
 
@@ -34,7 +34,7 @@ class CIDRIP {
 
     }
 
-    public CIDRIP(String address, int prefix_length) {
+    public Cidrip(String address, int prefix_length) {
         len = prefix_length;
         mIp = address;
     }
