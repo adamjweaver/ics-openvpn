@@ -72,6 +72,12 @@ android {
         }
     }
 
+    packagingOptions {
+        exclude 'lib/mips/libjbcrypto.so'
+        exclude 'lib/mips/libopenvpn.so'
+        exclude 'lib/mips/libopvpnutil.so'
+    }
+
 }
 
 
