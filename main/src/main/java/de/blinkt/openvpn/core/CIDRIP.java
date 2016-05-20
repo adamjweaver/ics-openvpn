@@ -7,7 +7,7 @@ package de.blinkt.openvpn.core;
 
 import java.util.Locale;
 
-class Cidrip {
+public class Cidrip {
     String mIp;
     int len;
 
